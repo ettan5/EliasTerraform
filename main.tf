@@ -12,13 +12,20 @@ terraform {
 provider "kubernetes" {
   config_path = "/etc/rancher/k3s/k3s.yaml"
 }
+resource "kubernetes_namespace_v1" "webb" {
+  metadata {
+    name = "webb"
+  }
+}
 
 resource "kubernetes_deployment" "my_nginx_" {
   metadata {
-    name = "local-nginx"
+    name      = "local-nginx"
+    namespace = kubernetes_namespace_v1.webb.metadata[0].name
     labels = {
       app = "webb"
     }
+
   }
 
 
@@ -43,8 +50,8 @@ resource "kubernetes_deployment" "my_nginx_" {
           name  = "nginx"
           port {
             container_port = 80
-            }
-         resources {
+          }
+          resources {
             limits = {
               cpu    = "500m"
               memory = "512Mi"
@@ -53,7 +60,7 @@ resource "kubernetes_deployment" "my_nginx_" {
               cpu    = "250m"
               memory = "256Mi"
             }
-        
+
           }
         }
       }
@@ -63,11 +70,13 @@ resource "kubernetes_deployment" "my_nginx_" {
 
 resource "kubernetes_service" "my_nginx_service" {
   metadata {
-    name = "local-nginx-service"
+    name      = "local-nginx-service"
+    namespace = kubernetes_namespace_v1.webb.metadata[0].name
     labels = {
       app = "webb"
     }
   }
+
 
   spec {
     selector = {
@@ -85,8 +94,9 @@ resource "kubernetes_service" "my_nginx_service" {
 
 
 resource "kubernetes_horizontal_pod_autoscaler_v2" "my_nginx_hpa" {
-  metadata { 
-    name = "local-nginx-hpa"
+  metadata {
+    name      = "local-nginx-hpa"
+    namespace = kubernetes_namespace_v1.webb.metadata[0].name
     labels = {
       app = "webb"
     }
@@ -95,22 +105,21 @@ resource "kubernetes_horizontal_pod_autoscaler_v2" "my_nginx_hpa" {
     min_replicas = 1
     max_replicas = 5
     scale_target_ref {
-        api_version = "apps/v1"
-        kind        = "Deployment"
-        name        = kubernetes_deployment.my_nginx_.metadata[0].name
-    
+      api_version = "apps/v1"
+      kind        = "Deployment"
+      name        = kubernetes_deployment.my_nginx_.metadata[0].name
+
     }
     metric {
       type = "Resource"
-        resource {
-            name = "cpu"
-            target {
-                type = "Utilization"
-                average_utilization = 50
-            }
+      resource {
+        name = "cpu"
+        target {
+          type                = "Utilization"
+          average_utilization = 50
         }
+      }
+    }
   }
 }
-        
-      
-    }
+
