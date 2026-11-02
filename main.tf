@@ -18,7 +18,7 @@ resource "kubernetes_namespace_v1" "webb" {
   }
 }
 
-resource "kubernetes_deployment" "my_nginx_" {
+resource "kubernetes_deployment_v1" "my_nginx_" {
   metadata {
     name      = "local-nginx"
     namespace = kubernetes_namespace_v1.webb.metadata[0].name
@@ -68,7 +68,7 @@ resource "kubernetes_deployment" "my_nginx_" {
   }
 }
 
-resource "kubernetes_service" "my_nginx_service" {
+resource "kubernetes_service_v1" "my_nginx_service" {
   metadata {
     name      = "local-nginx-service"
     namespace = kubernetes_namespace_v1.webb.metadata[0].name
@@ -107,7 +107,7 @@ resource "kubernetes_horizontal_pod_autoscaler_v2" "my_nginx_hpa" {
     scale_target_ref {
       api_version = "apps/v1"
       kind        = "Deployment"
-      name        = kubernetes_deployment.my_nginx_.metadata[0].name
+      name        = kubernetes_deployment_v1.my_nginx_.metadata[0].name
 
     }
     metric {
