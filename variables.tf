@@ -8,3 +8,8 @@ variable "max_replicas" {
   type        = number
   default     = 5
 }
+variable "external_port" {
+  description = "External port for the LoadBalancer service"
+  type        = number
+  default     = 8081
+}

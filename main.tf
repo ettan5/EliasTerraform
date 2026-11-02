@@ -12,6 +12,8 @@ terraform {
 provider "kubernetes" {
   config_path = "/etc/rancher/k3s/k3s.yaml"
 }
+
+
 resource "kubernetes_namespace_v1" "webb" {
   metadata {
     name = "webb"
@@ -84,7 +86,7 @@ resource "kubernetes_service_v1" "my_nginx_service" {
     }
 
     port {
-      port        = 8081
+      port        = var.external_port
       target_port = 80
     }
 
