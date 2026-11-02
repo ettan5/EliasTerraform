@@ -30,7 +30,7 @@ resource "kubernetes_deployment_v1" "my_nginx_" {
 
 
   spec {
-    replicas = var.replicas
+    replicas = 1
     selector {
       match_labels = {
         app = "webb"
@@ -100,10 +100,12 @@ resource "kubernetes_horizontal_pod_autoscaler_v2" "my_nginx_hpa" {
     labels = {
       app = "webb"
     }
+   
   }
+  
   spec {
-    min_replicas = 1
-    max_replicas = 5
+    min_replicas = var.min_replicas
+    max_replicas = var.max_replicas
     scale_target_ref {
       api_version = "apps/v1"
       kind        = "Deployment"
@@ -121,5 +123,19 @@ resource "kubernetes_horizontal_pod_autoscaler_v2" "my_nginx_hpa" {
       }
     }
   }
+}
+
+output "namespace" {
+  description = "Appens namespace"
+  value       = kubernetes_namespace_v1.webb.metadata[0].name
+}
+
+output "deployment_name" {
+  description = "The name of the deployment"
+  value       = kubernetes_deployment_v1.my_nginx_.metadata[0].name
+}
+output "repicas" {
+  description = "The number of replicas for the deployment"
+  value       = kubernetes_deployment_v1.my_nginx_.spec[0].replicas
 }
 
