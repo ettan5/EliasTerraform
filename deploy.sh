@@ -19,6 +19,7 @@ echo "Creating deployment with $min_replicas to $max_replicas replicas on port $
 
 
 Terraform_setup "$min_replicas" "$max_replicas" "$external_port"
+
 echo "Deployment completed successfully."
 kubectl get pods -n webb -l app=webb
 

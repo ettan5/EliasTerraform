@@ -1,3 +1,4 @@
+## read_replicas function prompts the user for a number of replicas and validates the input
 read_replicas() {
   local prompt="$1"
   local minimum="$2"
@@ -18,6 +19,7 @@ read_replicas() {
     break
   done
 }
+## Prompt for the external port number and validate it
 Port(){
 while true; do
     read -rp "Enter the external port for the LoadBalancer service (default: 8081): " external_port
@@ -31,7 +33,7 @@ while true; do
     break
   done
 }
-
+## Set up Terraform and apply the configuration
 Terraform_setup() {
   local min_replicas="$1"
   local max_replicas="$2"
@@ -39,7 +41,7 @@ Terraform_setup() {
   terraform plan -var="min_replicas=$min_replicas" -var="max_replicas=$max_replicas" -var="external_port=$external_port" -out=tfplan
   terraform apply tfplan
 }
-
+## Test Nginx deployment with curl to ensure it's running correctly
 Test_nginx() {
   
   local external_port="$1"
