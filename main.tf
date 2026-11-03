@@ -1,3 +1,4 @@
+## This Terraform configuration sets up a Kubernetes deployment with an Nginx container, a LoadBalancer service, and a Horizontal Pod Autoscaler (HPA) in a specified namespace. It also includes variables for configuring the number of replicas and the external port for the service.
 terraform {
   required_providers {
     kubernetes = {
@@ -8,7 +9,7 @@ terraform {
 
   required_version = ">= 1.0.0"
 }
-
+## specifies the Kubernetes provider configuration, including the path to the kubeconfig file for connecting to the Kubernetes cluster.
 provider "kubernetes" {
   config_path = "/etc/rancher/k3s/k3s.yaml"
 }
@@ -47,13 +48,17 @@ resource "kubernetes_deployment_v1" "my_nginx_" {
         }
       }
       spec {
+        
         container {
           image = "nginx:latest"
           name  = "nginx"
+        
           port {
             container_port = 80
           }
+          
           resources {
+           
             limits = {
               cpu    = "500m"
               memory = "512Mi"
@@ -94,7 +99,7 @@ resource "kubernetes_service_v1" "my_nginx_service" {
   }
 }
 
-
+## Hpa that scales the deployment based on CPU utilization if the cpu utilization exceeds 50% 
 resource "kubernetes_horizontal_pod_autoscaler_v2" "my_nginx_hpa" {
   metadata {
     name      = "local-nginx-hpa"
