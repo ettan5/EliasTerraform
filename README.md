@@ -33,6 +33,7 @@ Webbkontrollen använder `localhost`. Den är därför skriven för att köras d
 | `BashFunctions.sh` | Funktioner för verktygskontroll, minimum, maximum, portval, Terraform och webbkontroll. |
 | `.terraform.lock.hcl` | Låser providerversionen och dess kontrollsummor. |
 | `README.md` | Beskriver hur projektet fungerar och körs. |
+| `logs/deploy.log` | Skapas vid lyckad körning och sparar resultatet från webbkontrollen. Ignoreras av Git. |
 
 Alla kommandon nedan körs från projektmappen. Det behövs eftersom skriptet läser in `./BashFunctions.sh` och kör Terraform i den aktuella katalogen.
 
@@ -108,6 +109,7 @@ Körningen sker i följande ordning:
 4. Kör `terraform plan`, sparar planen i `tfplan` och genomför den med `terraform apply tfplan`.
 5. Listar appens poddar i namespacet `webb`.
 6. Anropar `Test_nginx` med den valda porten.
+7. Skapar katalogen `logs` om den saknas och lägger till en resultatrad i `logs/deploy.log`. Skriver sedan att driftsättningen lyckades.
 
 En sparad plan genomförs utan en extra bekräftelsefråga. För att själv granska planen innan apply kan du i stället köra:
 
@@ -140,7 +142,7 @@ Inmatningen är uppdelad i två funktioner för att göra den lättare att följ
 
 `set -e` gör att skriptet avbryts vid exempelvis ett misslyckat Terraform-kommando eller ett misslyckat webbtest. Vid ett apply-fel visar Terraform sin ursprungliga feltext. Därefter skriver funktionen `Error: Terraform apply failed.` och returnerar `1`, så att resten av deploy-skriptet inte körs. Det finns ingen automatisk återställning; resurser kan redan ha ändrats när felet uppstår.
 
-Skriptet skriver för närvarande `Deployment completed successfully` direkt efter apply, före webbtestet. Det meddelandet visar därför att Terraform-steget lyckades, inte att HTTP-kontrollen redan har passerat. Slutmeddelandet med adressen kommer efter webbtestet.
+Framgångsmeddelandet visas först efter ett lyckat webbtest och efter att resultatet har skrivits till filen. `mkdir -p logs` skapar katalogen om den saknas. `>> logs/deploy.log` lägger till en ny rad utan att skriva över tidigare resultat. Raden visar porten och det valda HPA-intervallet. Det är en enkel resultatlogg, inte en fullständig logg över fel eller alla kommandon.
 
 ## Verifiering och resultat
 
@@ -168,7 +170,9 @@ Då nås sidan på `http://localhost:18081`. Byt målporten 8081 i kommandot om 
 
 Under arbetet har Terraform-valideringen och Bash-syntaxkontrollerna passerat. De uppdelade inmatningsfunktionerna har testats med noll, text, negativa tal, decimaler, ett maximum under minimum, giltiga värden och slut på indata. Webbkontrollen har också hittat Nginx välkomsttext på en vald port.
 
-Vid den senaste kontrollen den 5 november kunde Terraform-providern inte startas i assistentens körmiljö. Det är inte ett bevis på fel i HCL-koden, men den senaste versionen behöver därför valideras i den vanliga terminalen och hela kedjan sluttestas före inlämningen.
+Vid sluttestet den 6 november 2026 passerade Terraform-valideringen med åtkomst till den lokala miljön. Hela `deploy.sh` kördes med minimum 1, maximum 7 och port 8080. Felaktiga svar avvisades, Terraform rapporterade inga nödvändiga ändringar och Nginx svarade. I ett separat test mot en port utan webbserver gjordes tio försök innan funktionen returnerade felstatus `1`. Kontroll av ett saknat verktyg och ett simulerat apply-fel gav också felstatus. Vid det simulerade apply-felet avbröts körningen före efterföljande steg.
+
+Sluttestet använde ett befintligt kluster och befintliga resurser. En helt ny installation från tom miljö testades inte. Resultatfilen lades till efter denna körning och dess filskrivning kontrollerades separat.
 
 I ett tidigare belastningstest skalade HPA från en till fyra redo poddar. Nedskalning verifierades inte i det testet. Det visar att uppskalningen fungerade då, men ersätter inte ett sluttest av den senaste versionen av hela skriptkedjan.
 
@@ -187,6 +191,6 @@ Projektet visar hur Terraform, Kubernetes och Bash kan användas tillsammans. Te
 
 Under arbetet blev skillnaden mellan en körande pod och en fungerande webbsida tydlig. Terraform kan ha genomfört ändringen även om en ny port ännu inte svarar. Webbkontrollen behöver därför testa HTTP och göra omförsök. Labels och namespace har också olika roller: labels används för urval medan namespace samlar resurserna i ett område i klustret.
 
-Förbättringar som återstår är att ange en bestämd Nginx-version och lägga till timeout för HTTP-anropen. Deploymenten anger inte längre ett fast antal repliker i koden. Vid fortsatt utveckling behöver planer granskas så att Terraform och HPA inte motverkar varandras skalningsändringar. Särskild loggfilshantering är inte implementerad ännu.
+Förbättringar som återstår är att ange en bestämd Nginx-version och lägga till timeout för HTTP-anropen. Deploymenten anger inte längre ett fast antal repliker i koden. Vid fortsatt utveckling behöver planer granskas så att Terraform och HPA inte motverkar varandras skalningsändringar. Resultatloggen kan senare utvecklas med tidsstämplar och felinformation.
 
 State-filer och sparade planer behövs för Terraform-körningen och kan innehålla känsliga uppgifter. De ska inte läggas i GitHub-repot. `.terraform/` innehåller hämtade providers och ska också hållas utanför versionshanteringen. Däremot bör `.terraform.lock.hcl` följa med projektet.
