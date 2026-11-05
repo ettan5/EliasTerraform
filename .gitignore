@@ -1,0 +1,32 @@
+# Hämtade Terraform-providers och lokal arbetskatalog
+.terraform/
+
+# Terraform state och säkerhetskopior
+*.tfstate
+*.tfstate.*
+
+# Sparade planer
+tfplan
+*.tfplan
+
+# Felrapporter och lokala override-filer
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Lokala variabelvärden som kan innehålla känsliga uppgifter
+*.tfvars
+*.tfvars.json
+
+# Loggar och tillfälliga editorfiler
+logs/
+*.log
+*.swp
+*.swo
+*~
+.DS_Store
+
+# .terraform.lock.hcl ska versionshanteras och ignoreras inte.

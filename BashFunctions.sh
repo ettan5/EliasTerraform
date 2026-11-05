@@ -1,18 +1,33 @@
-## read_replicas function prompts the user for a number of replicas and validates the input
-read_replicas() {
-  local prompt="$1"
-  local minimum="$2"
-
+## Fråga efter minimum och spara svaret direkt i min_replicas.
+read_min_replicas() {
   while true; do
-    read -rp "$prompt" REPLY || return 1
+    read -rp "Minimum replicas: " min_replicas || return 1
 
-    if ! [[ "$REPLY" =~ ^[1-9][0-9]*$ ]]; then
+    # Första siffran måste vara 1–9. Sedan får fler siffror följa.
+    # Till exempel godkänns 1, 5 och 20, men inte 0, -1 eller text.
+    if ! [[ "$min_replicas" =~ ^[1-9][0-9]*$ ]]; then
       echo "Error: Enter a positive whole number."
       continue
     fi
 
-    if (( REPLY < minimum )); then
-      echo "Error: Enter at least $minimum."
+    break
+  done
+}
+
+## Fråga efter maximum och jämför med minimum från första frågan.
+read_max_replicas() {
+  local minimum="$1"
+
+  while true; do
+    read -rp "Maximum replicas: " max_replicas || return 1
+
+    if ! [[ "$max_replicas" =~ ^[1-9][0-9]*$ ]]; then
+      echo "Error: Enter a positive whole number."
+      continue
+    fi
+
+    if (( max_replicas < minimum )); then
+      echo "Error: Maximum must be at least $minimum."
       continue
     fi
 
@@ -39,7 +54,10 @@ Terraform_setup() {
   local max_replicas="$2"
   local external_port="$3"
   terraform plan -var="min_replicas=$min_replicas" -var="max_replicas=$max_replicas" -var="external_port=$external_port" -out=tfplan
-  terraform apply tfplan
+  if ! terraform apply tfplan; then
+    echo "Error: Terraform apply failed."
+    return 1
+  fi
 }
 ## Test Nginx deployment with curl to ensure it's running correctly
 Test_nginx() {
@@ -58,4 +76,18 @@ Test_nginx() {
   
 echo "Nginx did not respond as expected after 10 attempts."
 return 1
+}
+
+Programs_install() {
+  local program
+
+  # Gå igenom varje verktygsnamn som skickats från arrayen i deploy.sh.
+  for program in "$@"; do
+    if command -v "$program" > /dev/null 2>&1; then
+      printf '\033[32m%s is installed\033[0m\n' "$program"
+    else
+      printf '\033[31m%s is not installed\033[0m\n' "$program"
+      return 1
+    fi
+  done
 }

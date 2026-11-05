@@ -33,7 +33,6 @@ resource "kubernetes_deployment_v1" "my_nginx_" {
 
 
   spec {
-    replicas = 1
     selector {
       match_labels = {
         app = "webb"

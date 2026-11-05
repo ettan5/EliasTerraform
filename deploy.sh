@@ -3,17 +3,16 @@ set -e
 source ./BashFunctions.sh
 
 echo "Nginx deployment script with k3s"
+programs=("terraform" "k3s")
+Programs_install "${programs[@]}"
 
 if [ ! -d ".terraform" ]; then
   echo "Initializing Terraform..."
   terraform init
 fi
 
-read_replicas "Minimum replicas: " 1
-min_replicas="$REPLY"
-
-read_replicas "Maximum replicas: " "$min_replicas"
-max_replicas="$REPLY"
+read_min_replicas
+read_max_replicas "$min_replicas"
 Port
 echo "Creating deployment with $min_replicas to $max_replicas replicas on port $external_port..."
 

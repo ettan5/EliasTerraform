@@ -29,8 +29,8 @@ Webbkontrollen använder `localhost`. Den är därför skriven för att köras d
 | --- | --- |
 | `main.tf` | Provider, namespace, deployment, Service, autoskalare och outputs. |
 | `variables.tf` | Variabler för minimum, maximum och extern port. |
-| `deploy.sh` | Läser in funktionsfilen och kör stegen i ordning. |
-| `BashFunctions.sh` | Funktioner för inmatning, portval, Terraform och webbkontroll. |
+| `deploy.sh` | Läser in funktionsfilen, definierar en array med verktygsnamn och kör stegen i ordning. |
+| `BashFunctions.sh` | Funktioner för verktygskontroll, minimum, maximum, portval, Terraform och webbkontroll. |
 | `.terraform.lock.hcl` | Låser providerversionen och dess kontrollsummor. |
 | `README.md` | Beskriver hur projektet fungerar och körs. |
 
@@ -43,7 +43,7 @@ Terraform använder `hashicorp/kubernetes` med versionskravet `~> 3.0`. Kubernet
 | Resurs | Namn | Uppgift |
 | --- | --- | --- |
 | Namespace | `webb` | Samlar appens resurser. |
-| Deployment | `local-nginx` | Startar med en replik och beskriver poddarnas innehåll. |
+| Deployment | `local-nginx` | Beskriver poddarnas innehåll. HPA styr önskat antal repliker. |
 | Service | `local-nginx-service` | Tar emot trafik på vald port och skickar vidare till port 80 i poddarna. |
 | Horizontal Pod Autoscaler, HPA | `local-nginx-hpa` | Ändrar antalet repliker inom valt minimum och maximum utifrån CPU-belastningen. |
 
@@ -102,8 +102,8 @@ Skriptet frågar efter minimum, maximum och extern port. Exempelvis minimum 1, m
 
 Körningen sker i följande ordning:
 
-1. Läser in funktionerna och kör `terraform init` om `.terraform` saknas.
-2. Läser och kontrollerar min/max samt port. Felaktiga svar ger en ny fråga.
+1. Läser in funktionerna och kontrollerar med `Programs_install` att kommandona Terraform och k3s finns. Funktionen installerar inga program och kontrollerar inte att klustret fungerar. Sedan körs `terraform init` om `.terraform` saknas.
+2. Frågar först efter minimum med `read_min_replicas` och sedan maximum med `read_max_replicas`. Porten läses in med `Port`. Felaktiga svar ger en ny fråga.
 3. Skickar värdena till `Terraform_setup` som argument.
 4. Kör `terraform plan`, sparar planen i `tfplan` och genomför den med `terraform apply tfplan`.
 5. Listar appens poddar i namespacet `webb`.
@@ -125,14 +125,22 @@ terraform apply tfplan
 
 | Funktion | Vad den gör |
 | --- | --- |
-| `read_replicas` | Tar emot frågetext och en nedre gräns. Frågar igen tills svaret är giltigt och lämnar värdet i `REPLY`. |
+| `read_min_replicas` | Frågar efter ett positivt heltal och sparar svaret direkt i `min_replicas`. Frågar igen vid ogiltigt svar. |
+| `read_max_replicas` | Tar emot minimum som argument. Kräver ett positivt heltal som är minst minimum och sparar svaret i `max_replicas`. |
 | `Port` | Frågar efter port och sparar den i Bash-variabeln `external_port`. |
-| `Terraform_setup` | Tar emot minimum, maximum och port. Kör plan och apply. |
+| `Terraform_setup` | Tar emot minimum, maximum och port. Kör plan och apply. Om apply misslyckas visas ett eget felmeddelande och funktionen returnerar `1`. |
 | `Test_nginx` | Tar emot porten och letar efter texten `Welcome to nginx!` i HTTP-svaret. |
+| `Programs_install` | Tar emot verktygsnamnen från arrayen i `deploy.sh`. En for-loop använder `command -v` för att hitta varje kommando i sökvägen. Skriver status med färg och returnerar `1` om något saknas. |
+
+Arrayen `programs=("terraform" "k3s")` samlar namnen på verktygen som ska kontrolleras. Anropet `Programs_install "${programs[@]}"` skickar varje namn som ett eget argument. Inuti funktionen går `for program in "$@"` igenom argumenten ett i taget. Funktionen kör inte verktygen och installerar dem inte.
+
+Inmatningen är uppdelad i två funktioner för att göra den lättare att följa. Frågetexten står direkt i respektive funktion. Först sparas minimum, sedan skickas det till maximumfunktionen som nedre gräns. Här behövs inte längre någon gemensam `prompt`-variabel eller `REPLY`.
 
 `Test_nginx` gör upp till tio försök med fem sekunders paus efter varje misslyckat försök. Vid lyckat test returnerar funktionen `0`. Om alla försök misslyckas skriver den ett felmeddelande och returnerar `1`. curl har ännu ingen timeout, så hela testet kan ta längre tid än pausernas sammanlagda tid.
 
-`set -e` gör att skriptet avbryts vid exempelvis ett misslyckat Terraform-kommando eller ett misslyckat webbtest. Skriptet skriver för närvarande `Deployment completed successfully` direkt efter apply, före webbtestet. Det meddelandet visar därför att Terraform-steget lyckades, inte att HTTP-kontrollen redan har passerat. Slutmeddelandet med adressen kommer efter webbtestet.
+`set -e` gör att skriptet avbryts vid exempelvis ett misslyckat Terraform-kommando eller ett misslyckat webbtest. Vid ett apply-fel visar Terraform sin ursprungliga feltext. Därefter skriver funktionen `Error: Terraform apply failed.` och returnerar `1`, så att resten av deploy-skriptet inte körs. Det finns ingen automatisk återställning; resurser kan redan ha ändrats när felet uppstår.
+
+Skriptet skriver för närvarande `Deployment completed successfully` direkt efter apply, före webbtestet. Det meddelandet visar därför att Terraform-steget lyckades, inte att HTTP-kontrollen redan har passerat. Slutmeddelandet med adressen kommer efter webbtestet.
 
 ## Verifiering och resultat
 
@@ -158,7 +166,9 @@ kubectl port-forward -n webb svc/local-nginx-service 18081:8081
 
 Då nås sidan på `http://localhost:18081`. Byt målporten 8081 i kommandot om Servicen använder en annan port.
 
-Under arbetet har Terraform-valideringen och Bash-syntaxkontrollerna passerat. Inmatningsfunktionen har testats med noll, text, ett maximum under minimum och giltiga värden. Webbkontrollen har också hittat Nginx välkomsttext på en vald port.
+Under arbetet har Terraform-valideringen och Bash-syntaxkontrollerna passerat. De uppdelade inmatningsfunktionerna har testats med noll, text, negativa tal, decimaler, ett maximum under minimum, giltiga värden och slut på indata. Webbkontrollen har också hittat Nginx välkomsttext på en vald port.
+
+Vid den senaste kontrollen den 5 november kunde Terraform-providern inte startas i assistentens körmiljö. Det är inte ett bevis på fel i HCL-koden, men den senaste versionen behöver därför valideras i den vanliga terminalen och hela kedjan sluttestas före inlämningen.
 
 I ett tidigare belastningstest skalade HPA från en till fyra redo poddar. Nedskalning verifierades inte i det testet. Det visar att uppskalningen fungerade då, men ersätter inte ett sluttest av den senaste versionen av hela skriptkedjan.
 
@@ -177,6 +187,6 @@ Projektet visar hur Terraform, Kubernetes och Bash kan användas tillsammans. Te
 
 Under arbetet blev skillnaden mellan en körande pod och en fungerande webbsida tydlig. Terraform kan ha genomfört ändringen även om en ny port ännu inte svarar. Webbkontrollen behöver därför testa HTTP och göra omförsök. Labels och namespace har också olika roller: labels används för urval medan namespace samlar resurserna i ett område i klustret.
 
-Förbättringar som återstår är att ange en bestämd Nginx-version, lägga till timeout för HTTP-anropen och låta Terraform ignorera ändringar i antalet repliker när HPA styr skalningen. Deploymenten anger fortfarande en replik, så en senare apply kan annars återställa HPA:s val. Arraybaserad verktygskontroll och särskild loggfilshantering är inte implementerade ännu.
+Förbättringar som återstår är att ange en bestämd Nginx-version och lägga till timeout för HTTP-anropen. Deploymenten anger inte längre ett fast antal repliker i koden. Vid fortsatt utveckling behöver planer granskas så att Terraform och HPA inte motverkar varandras skalningsändringar. Särskild loggfilshantering är inte implementerad ännu.
 
 State-filer och sparade planer behövs för Terraform-körningen och kan innehålla känsliga uppgifter. De ska inte läggas i GitHub-repot. `.terraform/` innehåller hämtade providers och ska också hållas utanför versionshanteringen. Däremot bör `.terraform.lock.hcl` följa med projektet.
